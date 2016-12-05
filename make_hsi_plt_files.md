@@ -1,6 +1,6 @@
-# HSI Plotfiles Notes
+# HPSS Plotfiles Notes
 
-To make a list of plt files to get from hsi:
+To make a list of plt files to get from HPSS:
 
 - Gets you to HSI interface
 
