@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+"""
+Chains together and submits a repeated job using qsub.
+
+Takes two arguments:
+1) Name of run script (with the aprun command)
+2) Number of times to submit the run script
+
+Usage: Chain together 8 qsub's of titan.run
+$ chainsub titan.run -n 8
+"""
+from __future__ import print_function
+import argparse
+from subprocess import Popen, PIPE
+
+parser = argparse.ArgumentParser()
+parser.add_argument('runscript', type=str,
+                    help='Name of run script to submit repeatedly.')
+parser.add_argument('-n', '--nsubmissions', type=int, default=1,
+                    help='Number of times to submit the run script. (Default 1)')
+args = parser.parse_args()
+
+proc = Popen(['qsub', args.runscript], stdout=PIPE, stderr=PIPE)
+out, err = proc.communicate()
+out = out.decode('utf-8')
+err = err.decode('utf-8')
+print(out)
+print(err)
+
+if args.nsubmissions > 1:
+    for i in range(args.nsubmissions-1):
+        ndepends = out.split()[0]
+        proc = Popen(['qsub',
+                      '-W',
+                      'depend=afterany:{}'.format(ndepends),
+                      args.runscript],
+                     stdout=PIPE,
+                     stderr=PIPE)
+        out, err = proc.communicate()
+        out = out.decode('utf-8')
+        err = err.decode('utf-8')
+        print(out)
+        print(err)
