@@ -1,0 +1,15 @@
+#!/bin/ksh
+# See make_hsi_plt_files.md for instructions
+#PBS -A [PROJECT]
+#PBS -N hpss_get
+#PBS -j oe
+#PBS -q dtn
+#PBS -l walltime=24:00:00,nodes=1
+#PBS -l gres=atlas1%atlas2
+
+cd $PBS_O_WORKDIR
+
+# Retrieve HPSS plotfiles listed in hsi_plt_files
+while read p || [[ -n $p ]]; do
+    htar -x -m -f $p
+done <hsi_plt_files
