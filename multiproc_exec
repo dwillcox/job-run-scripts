@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+"""
+Uses multiprocessing to execute independent tasks in parallel
+using N processes.
+
+Written for Python 3.
+
+Donald E. Willcox
+"""
+
+import argparse
+import shlex
+from subprocess import Popen, PIPE
+import multiprocessing
+
+parser = argparse.ArgumentParser()
+parser.add_argument('taskfile', type=str,
+                    help='Input file containing command-line tasks to execute, one per line.')
+parser.add_argument('-n', '--nprocs', type=int,
+                    help='Number of worker processes to use. Default is CPU count * 2.')
+args = parser.parse_args()
+
+def godo(cmd):
+    # First, facilitate shell=False by passing cmd
+    # through shlex.split()
+    cmd_lex = shlex.split(cmd)
+    
+    # Execute cmd by supplying it to Popen
+    proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
+    out, err = proc.communicate()
+
+    # Decode and return (stdout, stderr)
+    out = out.decode('utf-8')
+    err = err.decode('utf-8')
+    return (out, err)
+
+def initdo():
+    # Print to notify this worker process is starting
+    print('Init Worker Process: {}'.format(multiprocessing.current_process().name))
+
+if __name__ == '__main__':
+    # Get the list of tasks to execute
+    todo = []
+    ftasks = open(args.taskfile, 'r')
+    for l in ftasks.readlines():
+        ls = l.strip()
+        if ls:
+            todo.append(ls)
+    ftasks.close()
+
+    # Get the number of processors to use
+    if args.nprocs:
+        nprocs = args.nprocs
+    else:
+        nprocs = 2 * multiprocessing.cpu_count()
+
+    # Map tasks to the multiprocessing pool
+    mpool = multiprocessing.Pool(processes=nprocs,
+                                 initializer=initdo,
+                                 maxtasksperchild=10)
+    mpool_results = mpool.map(godo, todo)
+    mpool.close()
+    mpool.join()
+
+    print('Completed Multiprocessed Execution')
+    
+    # Print each result
+    nerr = 0
+    print('Results:')
+    for res, task in zip(mpool_results, todo):
+        print('################################################################################')
+        print('Task: {}'.format(task))
+        print('STDOUT: {}'.format(res[0]))
+        print('STDERR: {}'.format(res[1]))
+        if res[1]:
+            nerr += 1
+        print('################################################################################')
+
+    # Print result summary
+    print('Result Summary:')
+    print('{} Tasks Completed'.format(len(todo)))
+    print('{} Tasks Yielded An Error'.format(nerr))
+
