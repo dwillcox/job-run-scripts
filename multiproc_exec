@@ -22,27 +22,35 @@ parser.add_argument('-n', '--nprocs', type=int,
 args = parser.parse_args()
 
 def godo(cmd):
-    # First, separate dependent commands connected by &&
-    cmd_seq = cmd.split('&&')
-    out_seq = []
-    err_seq = []
-    # Execute each command in the command sequence
-    for cmd in cmd_seq:
-        print(cmd)
-        # First, facilitate shell=False by passing cmd
-        # through shlex.split()
-        cmd_lex = shlex.split(cmd)
-        # Execute cmd by supplying it to Popen
-        proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
-        out, err = proc.communicate()
-        # Decode and return (stdout, stderr)
-        out_seq.append(out.decode('utf-8'))
-        err_seq.append(err.decode('utf-8'))
-    return (out_seq, err_seq)
+    try:
+        # First, separate dependent commands connected by &&
+        cmd_seq = cmd.split('&&')
+        out_seq = []
+        err_seq = []
+        # Execute each command in the command sequence
+        for cmd in cmd_seq:
+            print(cmd)
+            # First, facilitate shell=False by passing cmd
+            # through shlex.split()
+            cmd_lex = shlex.split(cmd)
+            # Execute cmd by supplying it to Popen
+            proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
+            out, err = proc.communicate()
+            # Decode and return (stdout, stderr)
+            out_seq.append(out.decode('utf-8'))
+            err_seq.append(err.decode('utf-8'))
+        return (out_seq, err_seq)
+    except:
+        print('ERROR IN GODO GIVEN CMD: {}'.format(cmd))
+        raise
 
 def initdo():
     # Print to notify this worker process is starting
-    print('Init Worker Process: {}'.format(multiprocessing.current_process().name))
+    try:
+        print('Init Worker Process: {}'.format(multiprocessing.current_process().name))
+    except:
+        print('ERROR IN INITDO!')
+        raise
 
 if __name__ == '__main__':
     # Get the list of tasks to execute
@@ -62,8 +70,7 @@ if __name__ == '__main__':
 
     # Map tasks to the multiprocessing pool
     mpool = multiprocessing.Pool(processes=nprocs,
-                                 initializer=initdo,
-                                 maxtasksperchild=10)
+                                 initializer=initdo)
     mpool_results = mpool.map(godo, todo)
     mpool.close()
     mpool.join()
