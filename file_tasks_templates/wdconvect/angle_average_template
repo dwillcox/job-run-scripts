@@ -1,0 +1,5 @@
+./fwdconvect.Linux.gfortran.exe -p plotfiles/{file} -s {file}.aaprofile --rho_cutoff 1.0e5
+touch {file}.skip
+./htar_afile {file}.aaprofile
+mv {file}.aaprofile plotfiles/.
+
