@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+"""
+For all the *.htar files laying about after calling htar_afile or
+process.titan, take the directory the files are in as an argument and
+try to htar them again using htar_afile.
+
+Donald E. Willcox
+"""
+
+from __future__ import print_function
+import argparse
+import shutil
+import glob
+import os
+from subprocess import Popen, PIPE
+
+parser = argparse.ArgumentParser()
+parser.add_argument('filedir', type=str, default='.',
+                    help='Path to the directory where the files to htar are located. (Default is current working directory).')
+args = parser.parse_args()
+
+if __name__ == "__main__":
+    # Get list of *.htar files in the current directory
+    fhtar = glob.glob('*.htar')
+    if not fhtar:
+        exit()
+    
+    # Get list of files in the reference filedir
+    fdir = os.listdir(args.filedir)
+
+    for fh in fhtar:
+        fbase = fh[:-5]
+        # For each file *.htar, find it in the reference filedir        
+        if fbase in fdir:
+            # Copy it to the current directory
+            copypath = shutil.copy2(os.path.join(args.filedir, fbase), os.getcwd())
+            # Now try to htar it again using htar_afile
+            proc = Popen(['./htar_afile', fbase], stdout=PIPE, stderr=PIPE)
+            out, err = proc.communicate()
+            out = out.decode('utf-8')
+            err = err.decode('utf-8')
+            # If HTAR encountered an error, recreate the *.htar file
+            # since htar_afile will have deleted it.
+            if err:
+                fo = open(fh, 'w')
+                fo.write('HTAR: HTAR FAILED')
+                fo.close()
+            # Remove copy
+            os.remove(copypath)
+            # Print results
+            print('Attempting to HTAR file {}'.format(fbase))
+            print('STDOUT:')
+            print(out)
+            print('STDERR:')
+            print(err)
+        else:
+            print('Could not find file {} in supplied directory {}'.format(fbase, args.filedir))
+    

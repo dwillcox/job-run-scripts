@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+"""
+Given a file {file} and HPSS directory, htar the file into the HPSS
+directory. Create a {file}.htar temporary file to indicate failure.
+
+Donald E. Willcox
+"""
+
+from __future__ import print_function
+import argparse
+import os
+from subprocess import Popen, PIPE
+
+parser = argparse.ArgumentParser()
+parser.add_argument('file', type=str, 
+                    help='Name of file to archive using htar.')
+parser.add_argument('-hpd', '--hpssdir', type=str,
+                    help='Directory path on HPSS into which to copy the file. Defaults to the basename of the current working directory.')
+args = parser.parse_args()
+
+if __name__ == '__main__':
+    # Get the HPSS directory name
+    if args.hpssdir:
+        hpssdir = args.hpssdir
+    else:
+        hpssdir = os.path.basename(os.getcwd())   
+
+    # htar'ed file path on HPSS
+    hpp = os.path.join(hpssdir, args.file + '.tar')
+
+    # Execute the htar command
+    proc = Popen(['htar', 
+                  '-P', 
+                  '-H', 
+                  'copies=2', 
+                  '-cvf', 
+                  hpp, 
+                  args.file], stdout=PIPE, stderr=PIPE)
+    out, err = proc.communicate()
+    out = out.decode('utf-8')
+    err = err.decode('utf-8')
+    
+    # Test success status
+    if 'HTAR: HTAR SUCCESSFUL' in out:
+        print('Successful HTAR of file {}'.format(args.file))
+    else:
+        # Create a temporary file with stdout, stderr if failure
+        # temp file name is args.file + '.htar'
+        fo = open(args.file + '.htar', 'w')
+        fo.write('HTAR: HTAR FAILURE!\n')
+        fo.write('STDOUT:\n')
+        fo.write(out + '\n')
+        fo.write('STDERR:\n')
+        fo.write(err)
+        fo.close()
