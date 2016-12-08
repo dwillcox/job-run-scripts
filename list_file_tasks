@@ -54,7 +54,11 @@ if __name__ == '__main__':
 
     # Form commands and write the output file
     fo = open(args.out_task_file, 'w')
-    for sf, task in itertools.product(subject_files, tasks):
-        cmd = task.replace('{file}', sf)
-        fo.write(cmd + '\n')
+    for sf in subject_files:
+        cmd_line = ''
+        for ti, tk in enumerate(tasks):
+            if ti != 0:
+                cmd_line += ' && '
+            cmd_line += tk.replace('{file}', sf)
+        fo.write(cmd_line + '\n')
     fo.close()
