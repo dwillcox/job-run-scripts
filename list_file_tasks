@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+"""
+Writes a list of the tasks to execute on each subject file in the
+current directory given a supplied template file.
+
+In the template file, the name of the file is denoted by:
+"{file}" (excluding quotes).
+
+If there exists a file with the same name as the subject file with the
+extension ".skip" then skip it.
+
+Written for Python 3.
+
+Donald E. Willcox
+"""
+
+import argparse
+import itertools
+import re
+import os
+
+parser = argparse.ArgumentParser()
+parser.add_argument('template', type=str,
+                    help=('Template file containing command-line tasks to execute, one per line. \n' +
+                          'The name of the subject file should be denoted by the string "{file}" (excluding quotes).'))
+parser.add_argument('re_file_name', type=str,
+                    help='Python regular expression which files must match.')
+parser.add_argument('-o', '--out_task_file', type=str, default='tasks.todo',
+                    help='Name of the output file listing the desired tasks. (Default tasks.todo).')
+args = parser.parse_args()
+
+if __name__ == '__main__':
+    # Sanity Check: compile the regular expression
+    regexp = re.compile(args.re_file_name)
+    
+    # Get the tasks to perform on each file
+    tasks = []
+    tfile = open(args.template, 'r')
+    for l in tfile.readlines():
+        ls = l.strip()
+        if ls:
+            tasks.append(ls)
+    tfile.close()
+
+    # Get the list of subject files in the current directory
+    ## Files in the current directory
+    cwd_files = os.listdir()
+    ## Filter files by regexp and skip if {file}.skip exists
+    subject_files = []
+    for f in cwd_files:
+        if regexp.match(f):
+            if not f + '.skip' in cwd_files:
+                subject_files.append(f)
+
+    # Form commands and write the output file
+    fo = open(args.out_task_file, 'w')
+    for sf, task in itertools.product(subject_files, tasks):
+        cmd = task.replace('{file}', sf)
+        fo.write(cmd + '\n')
+    fo.close()
