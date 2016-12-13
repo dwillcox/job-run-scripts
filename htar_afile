@@ -12,21 +12,15 @@ import os
 from subprocess import Popen, PIPE
 
 parser = argparse.ArgumentParser()
-parser.add_argument('file', type=str, 
-                    help='Name of file to archive using htar.')
+parser.add_argument('files', type=str, nargs='+',
+                    help='Name of file(s) to archive using htar.')
 parser.add_argument('-hpd', '--hpssdir', type=str,
                     help='Directory path on HPSS into which to copy the file. Defaults to the basename of the current working directory.')
 args = parser.parse_args()
 
-if __name__ == '__main__':
-    # Get the HPSS directory name
-    if args.hpssdir:
-        hpssdir = args.hpssdir
-    else:
-        hpssdir = os.path.basename(os.getcwd())   
-
+def do_htar(hpssdir, filename):
     # htar'ed file path on HPSS
-    hpp = os.path.join(hpssdir, args.file + '.tar')
+    hpp = os.path.join(hpssdir, filename + '.tar')
 
     # Execute the htar command
     proc = Popen(['htar', 
@@ -35,21 +29,33 @@ if __name__ == '__main__':
                   'copies=2', 
                   '-cvf', 
                   hpp, 
-                  args.file], stdout=PIPE, stderr=PIPE)
+                  filename], stdout=PIPE, stderr=PIPE)
     out, err = proc.communicate()
     out = out.decode('utf-8')
     err = err.decode('utf-8')
     
     # Test success status
     if 'HTAR: HTAR SUCCESSFUL' in out:
-        print('Successful HTAR of file {}'.format(args.file))
+        print('Successful HTAR of file {}'.format(filename))
     else:
         # Create a temporary file with stdout, stderr if failure
-        # temp file name is args.file + '.htar'
-        fo = open(args.file + '.htar', 'w')
+        # temp file name is filename + '.htar'
+        fo = open(filename + '.htar', 'w')
         fo.write('HTAR: HTAR FAILURE!\n')
         fo.write('STDOUT:\n')
         fo.write(out + '\n')
         fo.write('STDERR:\n')
         fo.write(err)
         fo.close()
+
+if __name__ == '__main__':
+    # Get the HPSS directory name
+    if args.hpssdir:
+        hpssdir = args.hpssdir
+    else:
+        hpssdir = os.path.basename(os.getcwd())   
+
+    # HTAR the provided files
+    for f in args.files:
+        do_htar(hpssdir, f)
+        
