@@ -37,8 +37,14 @@ def godo(cmd):
             proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
             out, err = proc.communicate()
             # Decode and return (stdout, stderr)
-            out_seq.append(out.decode('utf-8'))
-            err_seq.append(err.decode('utf-8'))
+            try:
+                out_seq.append(out.decode('utf-8'))
+            except:
+                out_seq.append('OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(cmd))
+            try:
+                err_seq.append(err.decode('utf-8'))
+            except:
+                err_seq.append('ERROR DECODE EXCEPTION FOR COMMAND {}'.format(cmd))
         return (out_seq, err_seq)
     except:
         print('ERROR IN GODO GIVEN CMD: {}'.format(cmd))
