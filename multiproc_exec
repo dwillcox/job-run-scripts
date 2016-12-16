@@ -61,13 +61,16 @@ if __name__ == '__main__':
         if ls:
             todo.append(ls)
     ftasks.close()
+    ntasks = len(todo)
 
     # Get the number of processors to use
+    # Use nprocs = min(nprocs, ntasks)
     if args.nprocs:
         nprocs = args.nprocs
     else:
         nprocs = 2 * multiprocessing.cpu_count()
-
+    nprocs = min(nprocs, ntasks)
+    
     # Map tasks to the multiprocessing pool
     mpool = multiprocessing.Pool(processes=nprocs,
                                  initializer=initdo)
