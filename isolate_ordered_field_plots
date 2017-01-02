@@ -1,0 +1,106 @@
+#!/usr/bin/env python
+"""
+Given the current working directory, 
+suppose it is full of BoxLib plotfile field plots
+named as follows:
+
+wd_512_rhoc4-5_plt(66546).caaprofile.(radial_velocity).png
+
+The first parenthesis is the plot number, the
+second is the field name, and we want to extract both.
+
+Supply the regular expression the plotfiles
+should match.
+
+Rearrange them in subdirectories with symbolic
+links to make it easy to ffmpeg them.
+
+For each field, create a subdirectory if it
+doesn't already exist.
+
+For each plotfile, symbolically link it into the corresponding
+subdirectory with a number corresponding to
+its index.
+"""
+from __future__ import print_function
+import os
+import re
+import glob
+import argparse
+
+# Get plot file regexp
+parser = argparse.ArgumentParser()
+parser.add_argument('regexp',
+                    type=str,
+                    help='Regular expression the plotfiles should match in this directory.')
+args = parser.parse_args()
+
+# Compile regexp
+plotre = re.compile(args.regexp)
+
+# Define FieldPlotfile class
+class FieldPlotfile(object):
+    def __init__(self, name, number, field):
+        self.name = name
+        self.number = number
+        self.field = field
+        self.index = None
+
+# Find all the plotfiles matching regexp
+pf_names = []
+contents = os.listdir()
+for file in contents:
+    if plotre.match(file):
+        pf_names.append(file)
+
+# Find the boxlib plotfile number for each file
+# Find also the field name for each file
+pf_numbers = []
+pf_fields  = []
+num_plt_re = '\A.*_plt([0-9]*).*\Z'
+numre = re.compile(num_plt_re)
+for pf in pf_names:
+    mnum = numre.match(pf)
+    if not mnum:
+        print('ERROR: could not find plot number for file {}'.format(pf))
+        exit()
+    else:
+        num = int(mnum.group(1))
+        pf_numbers.append(num)
+        pfs = pf.split('.')
+        field = pfs[-2]
+        pf_fields.append(field)
+
+plotfiles = []
+for name, num, field in zip(pf_names, pf_numbers, pf_fields):
+    pf = FieldPlotfile(name, num, field)
+    plotfiles.append(pf)
+
+# Sort by plotnumber and set plot indexes
+plotfiles = sorted(plotfiles, key=lambda x: x.number)
+sort_nums = sorted(list(set(pf_numbers)))
+for pf in plotfiles:
+    # 1-based indexing for ffmpeg
+    pf.index = sort_nums.index(pf.number)+1 
+
+# Create a subdirectory for each field if it doesn't exist
+fields = list(set(pf_fields))
+field_dirs = {}
+for f in fields:
+    dir = os.path.join(os.getcwd(), 'sorted_{}'.format(f))
+    if not os.path.exists(dir):
+        try:
+            os.makedirs(dir)
+        except:
+            print('ERROR: could not create directory {}'.format(dir))
+            exit()
+    field_dirs[f] = dir
+
+# Create symbolic links in each subdirectory pointing to
+# their corresponding plotfiles. Uses 6 digits for the index.
+for pf in plotfiles:
+    linkname = 'plot_{:06}'.format(pf.index)
+    dir = field_dirs[pf.field]
+    linkpath = os.path.join(dir, linkname)
+    if not os.path.exists(linkpath):
+        os.symlink(os.path.relpath(os.path.join(os.getcwd(), pf.name), dir), linkpath)

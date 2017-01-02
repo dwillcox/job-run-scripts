@@ -1,0 +1,2 @@
+#!/bin/bash
+ffmpeg -r 15 -f image2 -s 1440x1080 -i plot_%06d -vcodec libx264 -crf 25 -pix_fmt yuv420p $1.mp4
