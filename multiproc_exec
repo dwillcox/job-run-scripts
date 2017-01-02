@@ -95,10 +95,16 @@ if __name__ == '__main__':
         out, err = res
         print('STDOUT:')
         for oi in out:
-            print(oi)
+            try:
+                print(oi)
+            except:
+                print('OUTPUT PRINT EXCEPTION!')
         print('STDERR:')
         for ei in err:
-            print(ei)
+            try:
+                print(ei)
+            except:
+                print('ERROR PRINT EXCEPTION!')
         if any(err):
             nerr += 1
         print('################################################################################')
