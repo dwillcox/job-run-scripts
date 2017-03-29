@@ -1,0 +1,1 @@
+./plot_angle_ave_profile {file} -rup 2.0e8 -lim global_field_extrema

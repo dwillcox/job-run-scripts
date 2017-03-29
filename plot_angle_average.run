@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -A ast106
+#PBS -N pcaa_wdc_ucold
+#PBS -j oe
+#PBS -q batch
+# Each Rhea node has 16 physical cores, 32 logical
+#PBS -l walltime=12:00:00,nodes=1
+#PBS -l gres=atlas1%atlas2
+
+source $MODULESHOME/init/bash
+module swap PE-intel PE-gnu
+module swap xalt/0.5.3 xalt/0.7.5
+module load python/3.5.1
+
+cd $PBS_O_WORKDIR
+
+# Rhea has 512 CPU-only nodes, each of which has 16 cores between 2 NUMA nodes
+# Use only 1 node for now and 32 threads since 
+# python's multiprocessing is node-bound.
+./multiproc_exec plot_angle_average.tasks --nprocs 32
