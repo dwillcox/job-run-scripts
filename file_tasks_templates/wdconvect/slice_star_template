@@ -1,0 +1,3 @@
+python slice-field.py {file} -dc
+python slice-enucdot.py {file} -dc -symlog
+python slice-vel.py {file} -dc
