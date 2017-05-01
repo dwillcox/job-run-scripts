@@ -33,6 +33,8 @@ class Task(object):
     def __init__(self, cmd=None):
         self.cmd = cmd.strip()
         self.done = False
+        self.out = ''
+        self.err = ''
         
     def mark_done(self):
         self.done = True
@@ -42,6 +44,35 @@ class Task(object):
 
     def get_cmd(self):
         return self.cmd
+
+    def get_output(self):
+        return self.out
+
+    def get_error(self):
+        return self.err
+
+    def execute(self):
+        try:
+            # First, facilitate shell=False by passing cmd
+            # through shlex.split()
+            cmd_lex = shlex.split(cmd)
+            # Execute cmd by supplying it to Popen
+            proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
+            out, err = proc.communicate()
+            # Decode out and err and return (stdout, stderr)
+            try:
+                out_str = out.decode('utf-8')
+            except:
+                out_str = 'OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
+            try:
+                err_str = err.decode('utf-8')
+            except:
+                err_str = 'ERROR DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
+        except:
+            err_str = 'UNKNOWN ERROR EXECUTING CMD: {}'.format(cmd)
+            out_str = err_str
+        self.out = out_str
+        self.err = err_str
 
 class DependentTasks(object):
     def __init__(self, commands=None):
@@ -96,13 +127,22 @@ class TaskCollection(object):
         # Set the jth dependent task complete
         self.master[j].set_all_done()
 
+    def num_idep_done(self):
+        # Get the number of independent tasks completed
+        ndone = 0
+        for td in self.master:
+            if not td.has_undone_task():
+                ndone += 1
+        return ndone
+
     def load_task_file(self, taskfile):
         # Get the list of tasks to execute
+        # Lines beginning with '#' are comments
         tasks = []
         ftasks = open(taskfile, 'r')
         for l in ftasks.readlines():
             ls = l.strip()
-            if ls:
+            if ls and ls[0] != '#':
                 tasks.append(ls)
         ftasks.close()
 
@@ -117,8 +157,14 @@ class TaskCollection(object):
                 if tc == tdslf.tasks[j]:
                     tdslf.tasks[j].mark_done()
                     
-    def save_to_checkpoint(self, checkfile='mpiproc_chk'):
+    def save_to_checkpoint(self, checkfile_base='mpiproc'):
+        num_idone = self.num_idep_done()
+        checkfile = '{}_chk{:06}'.format(checkfile_base, num_idone)
         fchk = open(checkfile, 'w')
+        # Write commented header indicating the status
+        fchk.write('# CHECKPOINT STATUS\n')
+        fchk.write('# TOTAL     INDEPENDENT TASKS: {}\n'.format(self.num_itasks))
+        fchk.write('# COMPLETED INDEPENDENT TASKS: {}\n'.format(num_idone))
         # Save progress for each DependentTask on its own line
         for dt in self.master:
             st = dt.get_done_string()
@@ -129,30 +175,7 @@ class TaskCollection(object):
         # Get the next dependent task
         for dt in self.master:
             if dt.has_undone_task():
-                yield dt
-
-def godo(cmd):
-    try:
-        # First, facilitate shell=False by passing cmd
-        # through shlex.split()
-        cmd_lex = shlex.split(cmd)
-        # Execute cmd by supplying it to Popen
-        proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
-        out, err = proc.communicate()
-        # Decode out and err and return (stdout, stderr)
-        try:
-            out_str = out.decode('utf-8')
-        except:
-            out_str = 'OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
-        try:
-            err_str = err.decode('utf-8')
-        except:
-            err_str = 'ERROR DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
-    except:
-        err_str = 'UNKNOWN ERROR EXECUTING CMD: {}'.format(cmd)
-        out_str = err_str
-    return out_str, err_str
-        
+                yield dt        
 
 def print_out_err(jtask, out, err):
     print('######################################################################')
@@ -199,12 +222,6 @@ if __name__ == '__main__':
         outs = []
         errs = []
 
-        # Cycle the checkpoint filenames to avoid
-        # corrupting a single checkpoint in the event
-        # of system failure.
-        checknames = ['mpiproc_chk_001', 'mpiproc_chk_002']
-        chk_pool = cycle(checknames)
-
         nfin = 0
         nerr = 0
         print('Results:')
@@ -220,7 +237,7 @@ if __name__ == '__main__':
                 irecv_pid.pop(j)
                 j = (irecv - 2)/2
                 tc.set_dep_done(j)
-                tc.save_to_checkpoint(checkfile=next(chk_pool))
+                tc.save_to_checkpoint()
                 break
             
         # Print result summary
@@ -236,9 +253,9 @@ if __name__ == '__main__':
             outs = []
             errs = []
             for t in tdep.gen_next_todo():
-                out, err = godo(t.get_cmd)
-                outs.append(out)
-                errs.append(err)
+                t.execute()
+                outs.append(t.get_output())
+                errs.append(t.get_error())
             outserrs = (outs, errs)
             sreq = mpi_comm.isend(outserrs, dest=0, tag=tdep.tag_to_root)
             sreq.wait()
