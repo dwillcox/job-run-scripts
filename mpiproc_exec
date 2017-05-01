@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-Uses multiprocessing to execute independent tasks in parallel
-using N processes.
+
+Uses MPI to execute a set of tasks in parallel, provided in a taskfile.
 
 Written for Python 3.
 
@@ -10,6 +10,7 @@ Donald E. Willcox
 
 import argparse
 import shlex
+import os
 from itertools import cycle
 from subprocess import Popen, PIPE
 from mpi4py import MPI
@@ -21,7 +22,14 @@ parser.add_argument('taskfile', type=str,
                           'A sequence of dependent commands may be concatenated on ' +
                           'the same line by double ampersands &&.'))
 parser.add_argument('-chk', '--checkpoint', type=str,
-                    help='(Optional) Checkpoint file containing completed tasks.')
+                    help='(Optional) Checkpoint file to restart from.')
+parser.add_argument('-bchk', '--base_checkpoint', type=str, default='mpiproc',
+                    help='(Optional) Base name for saving checkpoints. Defaults to "mpiproc"')
+parser.add_argument('-nchk', '--num_checkpoints', type=int, default=2,
+                    help=('(Optional) Number of most recent checkpoint files to keep.\n' +
+                          'By default, two checkpoint files will be carried.\n' +
+                          'To keep no checkpoints, use -nchk 0\n' +
+                          'To keep all checkpoints, use -nchk -1'))
 args = parser.parse_args()
 
 # Global MPI information
@@ -81,11 +89,17 @@ class DependentTasks(object):
     def __init__(self, commands=None):
         # Initialize tasks with a set of commands
         self.tasks = []
+        self.command_sequence = []
         if commands:
             self.tasks = [Task(cmd) for cmd in commands.split('&&')]
         self.tag_from_root = -1
         self.tag_to_root = -1
         self.index = -1
+
+    def get_command_sequence(self):
+        if not self.command_sequence:
+            self.command_sequence = [t.get_cmd() for t in self.tasks]
+        return self.command_sequence
 
     def set_all_done(self):
         # Set all these dependent tasks done
@@ -123,6 +137,7 @@ class TaskCollection(object):
     def __init__(self, taskfile=None):
         self.num_itasks = 0
         self.master = []
+        self.checkpoint_files = []
         
         if taskfile:
             self.load_task_file(taskfile)
@@ -161,19 +176,34 @@ class TaskCollection(object):
                 if tc == tdslf.tasks[j]:
                     tdslf.tasks[j].mark_done()
                     
-    def save_to_checkpoint(self, checkfile_base='mpiproc'):
+    def save_to_checkpoint(self, checkfile_base='mpiproc', num_checkpoints=2):
+        if num_checkpoints == 0:
+            return
+        
         num_idone = self.num_idep_done()
         checkfile = '{}_chk{:06}'.format(checkfile_base, num_idone)
         fchk = open(checkfile, 'w')
+        
         # Write commented header indicating the status
         fchk.write('# CHECKPOINT STATUS\n')
         fchk.write('# TOTAL     INDEPENDENT TASKS: {}\n'.format(self.num_itasks))
         fchk.write('# COMPLETED INDEPENDENT TASKS: {}\n'.format(num_idone))
+        
         # Save progress for each DependentTask on its own line
         for dt in self.master:
             st = dt.get_done_string()
             fchk.write(st + '\n')
         fchk.close()
+        
+        # Cull obsolete checkpoint files if applicable
+        if num_checkpoints != -1:
+            # Keep track of current checkpoint file name
+            self.checkpoint_files.append(checkfile)
+            if len(self.checkpoint_files) > num_checkpoints and num_checkpoints > 0:
+                cull_chk = self.checkpoint_files[:-num_checkpoints]
+                for chk in cull_chk:
+                    os.remove(chk)
+                    self.checkpoint_files.pop(0)
         
     def gen_next_todo(self):
         # Get the next dependent task
@@ -181,21 +211,24 @@ class TaskCollection(object):
             if dt.has_undone_task():
                 yield dt        
 
-def print_out_err(jtask, out, err):
+def print_out_err(jtask, cmds, out, err):
     print('######################################################################')
-    print('Task: {}'.format(jtask))
+    print('Task: {}\n'.format(jtask))
+    print('COMMANDS:')
+    for cmd in cmds:
+        print(cmd + '\n')
     print('STDOUT:')
     try:
         for oi in out:
             print(oi + '\n')
     except:
-        print('OUTPUT PRINT EXCEPTION!')
+        print('OUTPUT PRINT EXCEPTION!\n')
     print('STDERR:')
     try:
         for ei in err:
             print(ei + '\n')
     except:
-        print('ERROR PRINT EXCEPTION!')
+        print('ERROR PRINT EXCEPTION!\n')
     print('######################################################################\n')
 
 if __name__ == '__main__':
@@ -209,6 +242,7 @@ if __name__ == '__main__':
 
         pid_pool = cycle(range(1, mpi_size))
 
+        # Container for currently queued tasks
         irecv_pid = []
 
         for jdep, tdep in enumerate(tc.gen_next_todo()):
@@ -235,14 +269,16 @@ if __name__ == '__main__':
                 #print('Waiting to hear back from pid {}, irecv {}'.format(pid, irecv))
                 ioutserrs = mpi_comm.recv(source=pid, tag=irecv)
                 idx, out, err = ioutserrs
-                print_out_err(idx, out, err)                
+                cmds = tc.master[idx].get_command_sequence()
+                print_out_err(idx, cmds, out, err)                
                 if any(err):
                     nerr += 1
                 else:
                     nfin += 1
                 irecv_pid.pop(j)
                 tc.set_dep_done(idx)
-                tc.save_to_checkpoint()
+                tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
+                                      num_checkpoints=args.num_checkpoints)
                 break
             
         # Print result summary
@@ -250,7 +286,7 @@ if __name__ == '__main__':
         print('{} Tasks Completed Successfully'.format(nfin))
         print('{} Tasks Yielded An Error'.format(nerr))
 
-        # Program is terminating, send termination and disconnect communicator
+        # Program is terminating, send termination and finalize MPI
         continue_running = False
         for pid in range(1, mpi_size):
             mpi_comm.send(continue_running, dest=pid)
