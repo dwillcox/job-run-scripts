@@ -1,0 +1,244 @@
+#!/usr/bin/env python
+"""
+Uses multiprocessing to execute independent tasks in parallel
+using N processes.
+
+Written for Python 3.
+
+Donald E. Willcox
+"""
+
+import argparse
+import shlex
+from itertools import cycle
+from subprocess import Popen, PIPE
+from mpi4py import MPI
+
+parser = argparse.ArgumentParser()
+parser.add_argument('taskfile', type=str,
+                    help=('Input file containing command-line tasks to execute, ' +
+                          'one per line.\n' +
+                          'A sequence of dependent commands may be concatenated on ' +
+                          'the same line by double ampersands &&.'))
+parser.add_argument('-chk', '--checkpoint', type=str,
+                    help='(Optional) Checkpoint file containing completed tasks.')
+args = parser.parse_args()
+
+# Global MPI information
+mpi_comm = MPI.COMM_WORLD
+mpi_size = mpi_comm.Get_size()
+mpi_rank = mpi_comm.Get_rank()
+
+class Task(object):
+    def __init__(self, cmd=None):
+        self.cmd = cmd.strip()
+        self.done = False
+        
+    def mark_done(self):
+        self.done = True
+
+    def is_done(self):
+        return self.done
+
+    def get_cmd(self):
+        return self.cmd
+
+class DependentTasks(object):
+    def __init__(self, commands=None):
+        # Initialize tasks with a set of commands
+        self.tasks = []
+        if commands:
+            self.tasks = [Task(cmd) for cmd in commands.split('&&')]
+        self.tag_from_root = -1
+        self.tag_to_root = -1
+
+    def set_all_done(self):
+        # Set all these dependent tasks done
+        for t in self.tasks:
+            t.mark_done()
+
+    def has_undone_task(self):
+        # Return True if there remains an undone task
+        # Return False otherwise
+        for t in self.tasks:
+            if not t.is_done():
+                return True
+        return False
+
+    def gen_next_todo(self):
+        # Get the next undone dependent task index or return None
+        for t in self.tasks:
+            if not t.is_done():
+                yield t
+
+    def get_done_string(self):
+        # Get the string of commands already done
+        cstring = ''
+        for t in self.tasks:
+            if t.is_done:
+                if cstring:
+                    cstring += ' && ' + t.get_cmd()
+                else:
+                    cstring += t.get_cmd()
+        if not cstring:
+            cstring = '#undone'
+        return cstring
+
+class TaskCollection(object):
+    def __init__(self, taskfile=None):
+        self.num_itasks = 0
+        self.master = []
+        
+        if taskfile:
+            self.load_task_file(taskfile)
+
+    def set_dep_done(self, j):
+        # Set the jth dependent task complete
+        self.master[j].set_all_done()
+
+    def load_task_file(self, taskfile):
+        # Get the list of tasks to execute
+        tasks = []
+        ftasks = open(taskfile, 'r')
+        for l in ftasks.readlines():
+            ls = l.strip()
+            if ls:
+                tasks.append(ls)
+        ftasks.close()
+
+        self.master = [DependentTasks(t) for t in tasks]
+        self.num_itasks = len(self.master)
+
+    def refresh_from_checkpoint(self, checkfile):
+        tchk = TaskCollection(checkfile)
+        for id, tdchk in enumerate(tchk.master):
+            tdslf = self.master[id]
+            for j, tc in enumerate(tdchk.tasks):
+                if tc == tdslf.tasks[j]:
+                    tdslf.tasks[j].mark_done()
+                    
+    def save_to_checkpoint(self, checkfile='mpiproc_chk'):
+        fchk = open(checkfile, 'w')
+        # Save progress for each DependentTask on its own line
+        for dt in self.master:
+            st = dt.get_done_string()
+            fchk.write(st + '\n')
+        fchk.close()
+        
+    def gen_next_todo(self):
+        # Get the next dependent task
+        for dt in self.master:
+            if dt.has_undone_task():
+                yield dt
+
+def godo(cmd):
+    try:
+        # First, facilitate shell=False by passing cmd
+        # through shlex.split()
+        cmd_lex = shlex.split(cmd)
+        # Execute cmd by supplying it to Popen
+        proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
+        # Decode out and err and return (stdout, stderr)
+        try:
+            out_str = out.decode('utf-8')
+        except:
+            out_str = 'OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
+        try:
+            err_str = err.decode('utf-8')
+        except:
+            err_str = 'ERROR DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
+    except:
+        err_str = 'UNKNOWN ERROR EXECUTING CMD: {}'.format(cmd)
+        out_str = err_str
+    return out_str, err_str
+        
+
+def print_out_err(jtask, out, err):
+    print('######################################################################')
+    print('Task: {}'.format(jtask))
+    print('STDOUT:')
+    try:
+        for oi in out:
+            print(oi + '\n')
+    except:
+        print('OUTPUT PRINT EXCEPTION!')
+    print('STDERR:')
+    try:
+        for ei in err:
+            print(ei + '\n')
+    except:
+        print('ERROR PRINT EXCEPTION!')
+    if any(err):
+        return False
+    print('######################################################################')
+
+if __name__ == '__main__':
+    if mpi_rank == 0:
+        # Open the inputs file
+        tc = TaskCollection(args.taskfile)
+        
+        # Restart from the checkpoint file, if supplied
+        if args.checkpoint:
+            tc.refresh_from_checkpoint(args.checkpoint)
+
+        pid_pool = cycle(range(1, mpi_size+1))
+
+        irecv_pid = []
+
+        for jtag, tdep in enumerate(tc.gen_next_todo()):
+            isend = 2*jtag + 1
+            irecv = 2*jtag + 2
+            pid = next(pid_pool)
+            tdep.tag_from_root = isend
+            tdep.tag_to_root   = irecv
+            jreq = mpi_comm.isend(tdep, dest=pid, tag=isend)
+            jreq.wait()
+            irecv_pid.append((irecv, pid))
+
+        outs = []
+        errs = []
+
+        # Cycle the checkpoint filenames to avoid
+        # corrupting a single checkpoint in the event
+        # of system failure.
+        checknames = ['mpiproc_chk_001', 'mpiproc_chk_002']
+        chk_pool = cycle(checknames)
+
+        nfin = 0
+        nerr = 0
+        print('Results:')
+        while(irecv_pid):
+            for j, irp in enumerate(irecv_pid):
+                irecv, pid = irp
+                ireq = mpi_comm.recv(outserrs, source=pid, tag=irecv)
+                out, err = outserrs
+                if not print_out_err(j, out, err):
+                    nerr += 1
+                else:
+                    nfin += 1
+                irecv_pid.pop(j)
+                j = (irecv - 2)/2
+                tc.set_dep_done(j)
+                tc.save_to_checkpoint(checkfile=next(chk_pool))
+                break
+            
+        # Print result summary
+        print('Result Summary:')
+        print('{} Tasks Completed Successfully'.format(len(nfin)))
+        print('{} Tasks Yielded An Error'.format(nerr))
+
+        # Program is terminating, call MPI_ABORT
+        mpi_comm.Abort()
+    else:
+        while(True):
+            rreq = mpi_comm.recv(tdep, source=0, tag=MPI.MPI_ANY_TAG)
+            outs = []
+            errs = []
+            for t in tdep.gen_next_todo():
+                out, err = godo(t.get_cmd)
+                outs.append(out)
+                errs.append(err)
+            outserrs = (outs, errs)
+            sreq = mpi_comm.isend(outserrs, dest=0, tag=tdep.tag_to_root)
+            sreq.wait()
