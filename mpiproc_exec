@@ -35,6 +35,9 @@ class Task(object):
         self.done = False
         self.out = ''
         self.err = ''
+
+    def __eq__(self, other):
+        return self.cmd == other.cmd
         
     def mark_done(self):
         self.done = True
@@ -55,7 +58,7 @@ class Task(object):
         try:
             # First, facilitate shell=False by passing cmd
             # through shlex.split()
-            cmd_lex = shlex.split(cmd)
+            cmd_lex = shlex.split(self.cmd)
             # Execute cmd by supplying it to Popen
             proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
             out, err = proc.communicate()
@@ -63,13 +66,13 @@ class Task(object):
             try:
                 out_str = out.decode('utf-8')
             except:
-                out_str = 'OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
+                out_str = 'OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(self.cmd)
             try:
                 err_str = err.decode('utf-8')
             except:
-                err_str = 'ERROR DECODE EXCEPTION FOR COMMAND {}'.format(cmd)
+                err_str = 'ERROR DECODE EXCEPTION FOR COMMAND {}'.format(self.cmd)
         except:
-            err_str = 'UNKNOWN ERROR EXECUTING CMD: {}'.format(cmd)
+            err_str = 'UNKNOWN ERROR EXECUTING CMD: {}'.format(self.cmd)
             out_str = err_str
         self.out = out_str
         self.err = err_str
@@ -82,6 +85,7 @@ class DependentTasks(object):
             self.tasks = [Task(cmd) for cmd in commands.split('&&')]
         self.tag_from_root = -1
         self.tag_to_root = -1
+        self.index = -1
 
     def set_all_done(self):
         # Set all these dependent tasks done
@@ -106,7 +110,7 @@ class DependentTasks(object):
         # Get the string of commands already done
         cstring = ''
         for t in self.tasks:
-            if t.is_done:
+            if t.is_done():
                 if cstring:
                     cstring += ' && ' + t.get_cmd()
                 else:
@@ -192,9 +196,7 @@ def print_out_err(jtask, out, err):
             print(ei + '\n')
     except:
         print('ERROR PRINT EXCEPTION!')
-    if any(err):
-        return False
-    print('######################################################################')
+    print('######################################################################\n')
 
 if __name__ == '__main__':
     if mpi_rank == 0:
@@ -205,16 +207,17 @@ if __name__ == '__main__':
         if args.checkpoint:
             tc.refresh_from_checkpoint(args.checkpoint)
 
-        pid_pool = cycle(range(1, mpi_size+1))
+        pid_pool = cycle(range(1, mpi_size))
 
         irecv_pid = []
 
-        for jtag, tdep in enumerate(tc.gen_next_todo()):
-            isend = 2*jtag + 1
-            irecv = 2*jtag + 2
+        for jdep, tdep in enumerate(tc.gen_next_todo()):
+            isend = 2*jdep + 1
+            irecv = 2*jdep + 2
             pid = next(pid_pool)
             tdep.tag_from_root = isend
             tdep.tag_to_root   = irecv
+            tdep.index         = jdep
             jreq = mpi_comm.isend(tdep, dest=pid, tag=isend)
             jreq.wait()
             irecv_pid.append((irecv, pid))
@@ -228,34 +231,43 @@ if __name__ == '__main__':
         while(irecv_pid):
             for j, irp in enumerate(irecv_pid):
                 irecv, pid = irp
-                ireq = mpi_comm.recv(outserrs, source=pid, tag=irecv)
-                out, err = outserrs
-                if not print_out_err(j, out, err):
+                # useful for debugging deadlocks
+                #print('Waiting to hear back from pid {}, irecv {}'.format(pid, irecv))
+                ioutserrs = mpi_comm.recv(source=pid, tag=irecv)
+                idx, out, err = ioutserrs
+                print_out_err(idx, out, err)                
+                if any(err):
                     nerr += 1
                 else:
                     nfin += 1
                 irecv_pid.pop(j)
-                j = (irecv - 2)/2
-                tc.set_dep_done(j)
+                tc.set_dep_done(idx)
                 tc.save_to_checkpoint()
                 break
             
         # Print result summary
         print('Result Summary:')
-        print('{} Tasks Completed Successfully'.format(len(nfin)))
+        print('{} Tasks Completed Successfully'.format(nfin))
         print('{} Tasks Yielded An Error'.format(nerr))
 
-        # Program is terminating, call MPI_ABORT
-        mpi_comm.Abort()
+        # Program is terminating, send termination and disconnect communicator
+        continue_running = False
+        for pid in range(1, mpi_size):
+            mpi_comm.send(continue_running, dest=pid)
+        MPI.Finalize()
     else:
-        while(True):
-            rreq = mpi_comm.recv(tdep, source=0, tag=MPI.MPI_ANY_TAG)
-            outs = []
-            errs = []
-            for t in tdep.gen_next_todo():
-                t.execute()
-                outs.append(t.get_output())
-                errs.append(t.get_error())
-            outserrs = (outs, errs)
-            sreq = mpi_comm.isend(outserrs, dest=0, tag=tdep.tag_to_root)
-            sreq.wait()
+        stop = False
+        while(not stop):
+            tdep = mpi_comm.recv(source=0, tag=MPI.ANY_TAG)
+            if tdep:
+                outs = []
+                errs = []
+                for t in tdep.gen_next_todo():
+                    t.execute()
+                    outs.append(t.get_output())
+                    errs.append(t.get_error())
+                ioutserrs = (tdep.index, outs, errs)
+                sreq = mpi_comm.isend(ioutserrs, dest=0, tag=tdep.tag_to_root)
+                sreq.wait()
+            else:
+                stop = True    
