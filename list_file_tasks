@@ -21,18 +21,27 @@ import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('template', type=str,
-                    help=('Template file containing command-line tasks to execute, one per line. \n' +
-                          'The name of the subject file should be denoted by the string "{file}" (excluding quotes).'))
-parser.add_argument('re_file_name', type=str,
+                    help=('Template file containing command-line tasks to execute, ' +
+                          'one per line. \n' +
+                          'The name of the subject file should be denoted by the string ' +
+                          '"{file}" (excluding quotes).'))
+parser.add_argument('-re', '--regexp_file_names', type=str,
                     help='Python regular expression which files must match.')
+parser.add_argument('-ifile', '--input_file_names', type=str,
+                    help=('Name of file containing file names, one on each line, ' +
+                          'to use as {file} entries in the template.'))
 parser.add_argument('-o', '--out_task_file', type=str, default='tasks.todo',
                     help='Name of the output file listing the desired tasks. (Default tasks.todo).')
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    # Sanity Check: compile the regular expression
-    regexp = re.compile(args.re_file_name)
-    
+    if not (args.regexp_file_names or args.input_file_names):
+        print('ERROR: either -re or -ifile options must be supplied.')
+        
+    if args.regexp_file_names:
+        # Sanity Check: compile the regular expression
+        regexp = re.compile(args.re_file_name)
+
     # Get the tasks to perform on each file
     tasks = []
     tfile = open(args.template, 'r')
@@ -41,16 +50,27 @@ if __name__ == '__main__':
         if ls:
             tasks.append(ls)
     tfile.close()
-
-    # Get the list of subject files in the current directory
-    ## Files in the current directory
-    cwd_files = os.listdir()
-    ## Filter files by regexp and skip if {file}.skip exists
+        
     subject_files = []
-    for f in cwd_files:
-        if regexp.match(f):
-            if not f + '.skip' in cwd_files:
-                subject_files.append(f)
+
+    # Get input file names if supplied from a file
+    if args.input_file_names:
+        fif = open(args.input_file_names, 'r')
+        for l in fif:
+            subject_files.append(l.strip())
+        fif.close()
+
+    # Get input file names if targeted by regular expression
+    if args.regexp_file_names:
+        # Get the list of subject files in the current directory
+        ## Files in the current directory
+        cwd_files = os.listdir()
+        ## Filter files by regexp and skip if {file}.skip exists
+        subject_files = []
+        for f in cwd_files:
+            if regexp.match(f):
+                if not f + '.skip' in cwd_files:
+                    subject_files.append(f)
 
     # Form commands and write the output file
     fo = open(args.out_task_file, 'w')
