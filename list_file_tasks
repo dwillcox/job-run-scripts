@@ -40,7 +40,7 @@ if __name__ == '__main__':
         
     if args.regexp_file_names:
         # Sanity Check: compile the regular expression
-        regexp = re.compile(args.regexp_file_name)
+        regexp = re.compile(args.regexp_file_names)
 
     # Get the tasks to perform on each file
     tasks = []
