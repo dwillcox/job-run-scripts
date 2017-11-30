@@ -204,7 +204,14 @@ class TaskCollection(object):
                 for chk in cull_chk:
                     os.remove(chk)
                     self.checkpoint_files.pop(0)
-        
+
+    def note_if_finished(self, notefile_base='mpiproc'):
+        if (self.num_idep_done() == self.num_itasks):
+            notefile = '{}_finished'.format(notefile_base)
+            fnote = open(notefile, 'w')
+            fnote.write('# MPIPROC FINISHED WITH TASKS')
+            fnote.close()
+
     def gen_next_todo(self):
         # Get the next dependent task
         for dt in self.master:
@@ -280,11 +287,14 @@ if __name__ == '__main__':
                 tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
                                       num_checkpoints=args.num_checkpoints)
                 break
-            
+
         # Print result summary
         print('Result Summary:')
         print('{} Tasks Completed Successfully'.format(nfin))
         print('{} Tasks Yielded An Error'.format(nerr))
+
+        # Save a file noting we are finished
+        tc.note_if_finished(notefile_base=args.base_checkpoint)
 
         # Program is terminating, send termination and finalize MPI
         continue_running = False
