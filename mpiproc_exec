@@ -209,7 +209,7 @@ class TaskCollection(object):
         if (self.num_idep_done() == self.num_itasks):
             notefile = '{}_finished'.format(notefile_base)
             fnote = open(notefile, 'w')
-            fnote.write('# MPIPROC FINISHED WITH TASKS')
+            fnote.write('# MPIPROC FINISHED WITH TASKS\n')
             fnote.close()
 
     def gen_next_todo(self):
