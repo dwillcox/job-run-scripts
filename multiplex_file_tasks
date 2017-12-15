@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+"""
+Writes a list of the tasks to execute on subject files
+in any directory supplied by multiple lists of files.
+
+In the template file, the name of a file is denoted by:
+"{file1}", "{file2}", ... etc. (excluding quotes).
+
+Written for Python 3.
+
+Donald E. Willcox
+"""
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('template', type=str,
+                    help=('Template file containing command-line tasks to execute, ' +
+                          'one per line. \n' +
+                          'The names of the subject files should be denoted by strings ' +
+                          '"{file1}", "{file2}", ... etc. (excluding quotes).'))
+parser.add_argument('-ifiles', '--input_file_names', type=str, nargs='+', required=True,
+                    help=('Names of files containing file names, one on each line, ' +
+                          'to use as {fileX} entries in the template, respectively'))
+parser.add_argument('-o', '--out_task_file', type=str, default='tasks.todo',
+                    help='Name of the output file listing the desired tasks. (Default tasks.todo).')
+args = parser.parse_args()
+
+
+def gen_file_list(subject_files):
+    """Generator yielding a list of ordered input files selected in order from
+    the subject_files list, one from each of args.input_file_names."""
+
+    num_files = min([len(fl) for fl in subject_files])
+    for i in range(num_files):
+        flist = [fl[i] for fl in subject_files]
+        yield flist
+
+def get_new_command(task, fnames):
+    """Apply file names in list fnames to the 
+    strings {file1}, {file2}, etc in the task string."""
+
+    for i, f in enumerate(fnames):
+        expr = '{' + 'file{}'.format(i) + '}'
+        task = task.replace(expr, f)
+    return task
+
+if __name__ == '__main__':
+    # Get the tasks to perform on each file
+    tasks = []
+    tfile = open(args.template, 'r')
+    for l in tfile.readlines():
+        ls = l.strip()
+        if ls:
+            tasks.append(ls)
+    tfile.close()
+        
+    subject_files = []
+
+    # Get input file names
+    for i, ifile in enumerate(args.input_file_names):
+        flist = []
+        fif = open(ifile, 'r')
+        for l in fif:
+            flist.append(l.strip())
+        fif.close()
+        subject_files.append(flist)
+
+    # Form commands and write the output file
+    fo = open(args.out_task_file, 'w')
+    for flist in gen_file_list(subject_files):
+        cmd_line = ''
+        for ti, tk in enumerate(tasks):
+            if ti != 0:
+                cmd_line += ' && '
+            cmd_new = get_new_command(tk, flist)
+            cmd_line += cmd_new
+        fo.write(cmd_line + '\n')
+    fo.close()
