@@ -1,16 +1,21 @@
 #!/usr/bin/env python
-"""
-Writes a list of the tasks to execute on subject files
+"""Writes a list of the tasks to execute on subject files
 in any directory supplied by multiple lists of files.
 
 In the template file, the name of a file is denoted by:
 "{file1}", "{file2}", ... etc. (excluding quotes).
 
+If the string "{count-N}" is found in a task, with N being an integer,
+this string will be replaced by a zero-padded right-aligned integer
+counter indicating the index into the structure subject_files.
+
 Written for Python 3.
 
 Donald E. Willcox
+
 """
 import argparse
+import re
 
 parser = argparse.ArgumentParser()
 parser.add_argument('template', type=str,
@@ -26,6 +31,8 @@ parser.add_argument('-o', '--out_task_file', type=str, default='tasks.todo',
 args = parser.parse_args()
 
 
+re_counter = re.compile('\{count-([0-9]+)\}')
+
 def gen_file_list(subject_files):
     """Generator yielding a list of ordered input files selected in order from
     the subject_files list, one from each of args.input_file_names."""
@@ -35,13 +42,26 @@ def gen_file_list(subject_files):
         flist = [fl[i] for fl in subject_files]
         yield flist
 
-def get_new_command(task, fnames):
+def get_new_command(task, fnames, index):
     """Apply file names in list fnames to the 
-    strings {file1}, {file2}, etc in the task string."""
+    strings {file1}, {file2}, etc in the task string.
+    Also replace {count-N} with the zero-padded index."""
 
+    # Insert filenames into the task placeholders
     for i, f in enumerate(fnames):
-        expr = '{' + 'file{}'.format(i) + '}'
+        expr = '{' + 'file{}'.format(i+1) + '}'
         task = task.replace(expr, f)
+
+    # Find all instances of {count-N} and insert index
+    while True:
+        m = re_counter.search(task)
+        if m:
+            to_replace = m.group(0)
+            n = int(m.group(1))
+            replace_with = ('{:0'+str(n)+'d}').format(index)
+            task = task.replace(to_replace, replace_with)
+        else:
+            break
     return task
 
 if __name__ == '__main__':
@@ -67,12 +87,12 @@ if __name__ == '__main__':
 
     # Form commands and write the output file
     fo = open(args.out_task_file, 'w')
-    for flist in gen_file_list(subject_files):
+    for ix, flist in enumerate(gen_file_list(subject_files)):
         cmd_line = ''
         for ti, tk in enumerate(tasks):
             if ti != 0:
                 cmd_line += ' && '
-            cmd_new = get_new_command(tk, flist)
+            cmd_new = get_new_command(tk, flist, ix)
             cmd_line += cmd_new
         fo.write(cmd_line + '\n')
     fo.close()
