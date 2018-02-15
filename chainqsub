@@ -31,7 +31,8 @@ for i in range(args.nsubmissions):
     if ndepends != -1:
         cmdlist += ['-W', 'depend=afterany:{}'.format(ndepends)]
     cmdlist += [args.runscript]
-    proc = Popen(cmdlist, stdout=PIPE, stderr=PIPE)
+    cmdstr = ' '.join(cmdlist)
+    proc = Popen(cmdstr, stdout=PIPE, stderr=PIPE, shell=True)
     out, err = proc.communicate()
     out = out.decode('utf-8')
     err = err.decode('utf-8')
