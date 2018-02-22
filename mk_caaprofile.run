@@ -1,0 +1,26 @@
+#!/bin/bash
+#PBS -A ast106sbu
+#PBS -N mk_caa_t0008
+#PBS -j oe
+#PBS -q batch
+# Each Rhea node has 16 physical cores, 32 logical
+#PBS -l walltime=12:00:00,nodes=1
+#PBS -l gres=atlas1%atlas2
+
+source $MODULESHOME/init/bash
+module swap PE-intel PE-gnu
+module swap xalt/0.5.3 xalt/0.7.5
+
+# Anaconda on compute nodes
+module load python_anaconda3
+export PATH=/ccs/proj/ast106/anaconda3/bin:$PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/ccs/proj/ast106/anaconda3/lib
+export PYTHONPATH=$PYTHONPATH:/ccs/proj/ast106/anaconda3/lib/python3.5/site-packages
+export PYTHONPATH=$PYTHONPATH:/sw/xk6/python_anaconda3/2.3.0/sles11.3_gnu4.8.2/lib/python3.4/site-packages
+
+cd $PBS_O_WORKDIR
+
+# Rhea has 512 CPU-only nodes, each of which has 16 cores between 2 NUMA nodes
+# Use only 1 node for now and 32 threads since 
+# python's multiprocessing is node-bound.
+./multiproc_exec mk_caaprofile.tasks --nprocs 32
