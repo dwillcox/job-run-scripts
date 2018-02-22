@@ -1,0 +1,9 @@
+if [ ! -e {file}.slice.x.electron_fraction_asymmetry.png ]; then slice-field.py {file} -res 4096 -w 1.1e8 -axis x -f electron_fraction_asymmetry -min ' -3.5e-5' -max ' -1e-5' -cmap octarine; fi
+if [ ! -e {file}.slice.x.vel_radial.png ]; then slice-vel.py {file} -res 4096 -w 1.1e8 -axis x; fi
+if [ ! -e {file}.slice.x.enucdot.png ]; then slice-enucdot.py {file} -res 4096 -w 1.1e8 -axis x -logmax 11 -symlog; fi
+if [ ! -e {file}.slice.y.electron_fraction_asymmetry.png ]; then slice-field.py {file} -res 4096 -w 1.1e8 -axis y -f electron_fraction_asymmetry -min ' -3.5e-5' -max ' -1e-5' -cmap octarine; fi
+if [ ! -e {file}.slice.y.vel_radial.png ]; then slice-vel.py {file} -res 4096 -w 1.1e8 -axis y; fi
+if [ ! -e {file}.slice.y.enucdot.png ]; then slice-enucdot.py {file} -res 4096 -w 1.1e8 -axis y -logmax 11 -symlog; fi
+if [ ! -e {file}.slice.z.electron_fraction_asymmetry.png ]; then slice-field.py {file} -res 4096 -w 1.1e8 -axis z -f electron_fraction_asymmetry -min ' -3.5e-5' -max ' -1e-5' -cmap octarine; fi
+if [ ! -e {file}.slice.z.vel_radial.png ]; then slice-vel.py {file} -res 4096 -w 1.1e8 -axis z; fi
+if [ ! -e {file}.slice.z.enucdot.png ]; then slice-enucdot.py {file} -res 4096 -w 1.1e8 -axis z -logmax 11 -symlog; fi
