@@ -20,7 +20,7 @@ parser.add_argument('taskfile', type=str,
                     help=('Input file containing command-line tasks to execute, ' +
                           'one per line.\n' +
                           'A sequence of dependent commands may be concatenated on ' +
-                          'the same line by double ampersands &&.'))
+                          'the same line by triple ampersands &&&.'))
 parser.add_argument('-chk', '--checkpoint', type=str,
                     help='(Optional) Checkpoint file to restart from.')
 parser.add_argument('-bchk', '--base_checkpoint', type=str, default='mpiproc',
@@ -91,7 +91,7 @@ class DependentTasks(object):
         self.tasks = []
         self.command_sequence = []
         if commands:
-            self.tasks = [Task(cmd) for cmd in commands.split('&&')]
+            self.tasks = [Task(cmd) for cmd in commands.split('&&&')]
         self.tag_from_root = -1
         self.tag_to_root = -1
         self.index = -1
@@ -126,7 +126,7 @@ class DependentTasks(object):
         for t in self.tasks:
             if t.is_done():
                 if cstring:
-                    cstring += ' && ' + t.get_cmd()
+                    cstring += ' &&& ' + t.get_cmd()
                 else:
                     cstring += t.get_cmd()
         if not cstring:
