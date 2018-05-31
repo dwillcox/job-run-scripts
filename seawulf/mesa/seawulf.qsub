@@ -1,0 +1,25 @@
+#!/bin/bash
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=00:10:00
+#PBS -N mesa_test
+#PBS -q debug
+#PBS -j oe
+#PBS -o mesa_test.txt
+
+module load shared
+module load maui
+module load torque
+module load mvapich2/gcc/64/2.2rc1
+module load gcc
+module load anaconda/3
+
+source /gpfs/home/dwillcox/codes/mesa-for-UQ/setup_mesa.sh
+
+export PATH="/gpfs/home/dwillcox/job-run-scripts:$PATH"
+
+export OMP_NUM_THREADS=1
+
+cd $PBS_O_WORKDIR
+
+mpirun -n 1 mesa_status_run.py run_c0_test.log -s log_L_lower_limit -rno -rlog run_c0_test.log
+
