@@ -1,0 +1,17 @@
+#!/bin/bash
+#PBS -l nodes=8:ppn=28
+#PBS -l walltime=48:00:00
+#PBS -N urca_2lev_R4.5_T6.0
+#PBS -q long
+#PBS -j oe
+#PBS -o maestro_rc-4.5_Tc-6.0_2018-05-29_out.txt
+
+module load shared
+module load maui
+module load torque
+module load mvapich2
+module load gcc
+
+cd $PBS_O_WORKDIR
+
+mpirun -n 224 ./main.Linux.gfortran.mpi.exe inputs_3d_2level_Tc6.0e8_rhoc4.5e9
