@@ -49,14 +49,14 @@ def runcmd(cmd):
     print(err_msg)
 
 def runmesa():
-    cmd = './rn >> {}'.format(args.save_log)
+    cmd = './rn >> {}'.format(args.run_log)
     if not args.dry_run:
         runcmd(cmd)
     else:
         print(cmd)
 
 def restartmesa(photo):
-    cmd = './re {} >> {}'.format(photo, args.save_log)
+    cmd = './re {} >> {}'.format(photo, args.run_log)
     if not args.dry_run:
         runcmd(cmd)
     else:
