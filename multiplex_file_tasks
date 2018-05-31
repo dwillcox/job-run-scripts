@@ -91,7 +91,7 @@ if __name__ == '__main__':
         cmd_line = ''
         for ti, tk in enumerate(tasks):
             if ti != 0:
-                cmd_line += ' && '
+                cmd_line += ' &&& '
             cmd_new = get_new_command(tk, flist, ix)
             cmd_line += cmd_new
         fo.write(cmd_line + '\n')
