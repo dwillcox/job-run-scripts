@@ -66,9 +66,12 @@ class Task(object):
         try:
             # First, facilitate shell=False by passing cmd
             # through shlex.split()
-            cmd_lex = shlex.split(self.cmd)
+            # cmd_lex = shlex.split(self.cmd)
             # Execute cmd by supplying it to Popen
-            proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
+
+            # Use shell=True to allow chaining multiple commands
+            # into one command using double ampersands (&&)
+            proc = Popen(self.cmd, stdout=PIPE, stderr=PIPE, shell=True)
             out, err = proc.communicate()
             # Decode out and err and return (stdout, stderr)
             try:

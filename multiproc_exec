@@ -32,9 +32,12 @@ def godo(cmd):
             print(cmd)
             # First, facilitate shell=False by passing cmd
             # through shlex.split()
-            cmd_lex = shlex.split(cmd)
+            # cmd_lex = shlex.split(cmd)
             # Execute cmd by supplying it to Popen
-            proc = Popen(cmd_lex, stdout=PIPE, stderr=PIPE)
+
+            # Use shell=True to allow chaining multiple commands
+            # into one command using double ampersands (&&)
+            proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
             out, err = proc.communicate()
             # Decode and return (stdout, stderr)
             try:
