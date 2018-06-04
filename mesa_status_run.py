@@ -98,11 +98,11 @@ def processlog(logfile):
             else:
                 if args.success:
                     if code in args.success:
-                        print('Successful termination with code {}'.format(code))
+                        print('success {}'.format(code))
                     else:
-                        print('Error termination with code {}'.format(code))
+                        print('error {}'.format(code))
                 else:
-                    print('Terminated with code {}'.format(code))
+                    print('terminated {}'.format(code))
         else:
             # Check for a photo to restart
             photo = getrestartphoto(lines)
