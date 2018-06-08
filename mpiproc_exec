@@ -283,17 +283,27 @@ if __name__ == '__main__':
             nfin = 0
             nerr = 0
 
-            for jdep, tdep in enumerate(tc.gen_next_todo()):
+            finished_with_tasks = False
+            jdep = 0
+
+            while not finished_with_tasks:
+                if tc.num_itasks == tc.num_idep_done():
+                    finished_with_tasks = True
+
                 while (len(irecv_pid) < mpi_size - 1):
-                    pid = pid_pool.pop()
-                    isend = 2*jdep + 1
-                    irecv = 2*jdep + 2
-                    tdep.tag_from_root = isend
-                    tdep.tag_to_root   = irecv
-                    tdep.index         = jdep
-                    jsend_request = mpi_comm.isend(tdep, dest=pid, tag=isend)
-                    jrecv_request = mpi_comm.irecv(source=pid, tag=irecv)                    
-                    irecv_pid.append((pid, jrecv_request))
+                    for tdep in tc.gen_next_todo():
+                        pid = pid_pool.pop()
+                        isend = 2*jdep + 1
+                        irecv = 2*jdep + 2
+                        tdep.tag_from_root = isend
+                        tdep.tag_to_root   = irecv
+                        tdep.index         = jdep
+                        print('Assigning job {} to process {}'.format(jdep, pid))
+                        jsend_request = mpi_comm.isend(tdep, dest=pid, tag=isend)
+                        jrecv_request = mpi_comm.irecv(source=pid, tag=irecv)                    
+                        irecv_pid.append((pid, jrecv_request))
+                        jdep += 1
+                        break
 
                 assign_new_task = False
                 while not assign_new_task:
@@ -301,6 +311,7 @@ if __name__ == '__main__':
                     for j, (pid, jrecv_request) in enumerate(irecv_pid):
                         jrecv_status = jrecv_request.Get_status()
                         if jrecv_status != 0:
+                            print('Process {} finished its task.'.format(pid))
                             # Successful receive, task is completed
                             idx, out, err = jrecv_request.wait()
                             cmds = tc.master[idx].get_command_sequence()
