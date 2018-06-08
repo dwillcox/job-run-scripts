@@ -215,8 +215,15 @@ class TaskCollection(object):
             fnote.write('# MPIPROC FINISHED WITH TASKS\n')
             fnote.close()
 
+    def get_undone_tasks(self):
+        undone = []
+        for dt in self.master:
+            if dt.has_undone_task():
+                undone.append(dt)
+        return undone
+
     def gen_next_todo(self):
-        # Get the next dependent task
+        # Get the next independent task
         for dt in self.master:
             if dt.has_undone_task():
                 yield dt        
@@ -286,31 +293,33 @@ if __name__ == '__main__':
             finished_with_tasks = False
             jdep = 0
 
+            undone_tasks = tc.get_undone_tasks()
+
             while not finished_with_tasks:
                 if tc.num_itasks == tc.num_idep_done():
+                    print('finished with all tasks')
                     finished_with_tasks = True
 
-                while (len(irecv_pid) < mpi_size - 1):
-                    for tdep in tc.gen_next_todo():
-                        pid = pid_pool.pop()
-                        isend = 2*jdep + 1
-                        irecv = 2*jdep + 2
-                        tdep.tag_from_root = isend
-                        tdep.tag_to_root   = irecv
-                        tdep.index         = jdep
-                        print('Assigning job {} to process {}'.format(jdep, pid))
-                        jsend_request = mpi_comm.isend(tdep, dest=pid, tag=isend)
-                        jrecv_request = mpi_comm.irecv(source=pid, tag=irecv)                    
-                        irecv_pid.append((pid, jrecv_request))
-                        jdep += 1
-                        break
+                while (undone_tasks and len(irecv_pid) < mpi_size - 1):
+                    tdep = undone_tasks.pop(0)
+                    pid = pid_pool.pop(0)
+                    isend = 2*jdep + 1
+                    irecv = 2*jdep + 2
+                    tdep.tag_from_root = isend
+                    tdep.tag_to_root   = irecv
+                    tdep.index         = jdep
+                    print('Assigning job {} to process {}'.format(jdep, pid))
+                    jsend_request = mpi_comm.isend(tdep, dest=pid, tag=isend)
+                    jrecv_request = mpi_comm.irecv(source=pid, tag=irecv)                    
+                    irecv_pid.append((pid, jrecv_request))
+                    jdep += 1
 
                 assign_new_task = False
                 while not assign_new_task:
-                    sleep(1)
+                    sleep(0.1)
                     for j, (pid, jrecv_request) in enumerate(irecv_pid):
                         jrecv_status = jrecv_request.Get_status()
-                        if jrecv_status != 0:
+                        if jrecv_status:
                             print('Process {} finished its task.'.format(pid))
                             # Successful receive, task is completed
                             idx, out, err = jrecv_request.wait()
@@ -343,7 +352,7 @@ if __name__ == '__main__':
             MPI.Finalize()
         else:
             stop = False
-            while(not stop):
+            while (not stop):
                 tdep = mpi_comm.recv(source=0, tag=MPI.ANY_TAG)
                 if tdep:
                     outs = []
