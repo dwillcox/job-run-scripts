@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 """
-
 Uses MPI to execute a set of tasks in parallel, provided in a taskfile.
 
 Written for Python 3.
@@ -14,6 +13,7 @@ import os
 from itertools import cycle
 from subprocess import Popen, PIPE
 from mpi4py import MPI
+from time import sleep
 
 parser = argparse.ArgumentParser()
 parser.add_argument('taskfile', type=str,
@@ -272,46 +272,50 @@ if __name__ == '__main__':
             if args.checkpoint:
                 tc.refresh_from_checkpoint(args.checkpoint)
 
-            pid_pool = cycle(range(1, mpi_size))
+            pid_pool = list(range(1, mpi_size))
 
             # Container for currently queued tasks
             irecv_pid = []
-
-            for jdep, tdep in enumerate(tc.gen_next_todo()):
-                isend = 2*jdep + 1
-                irecv = 2*jdep + 2
-                pid = next(pid_pool)
-                tdep.tag_from_root = isend
-                tdep.tag_to_root   = irecv
-                tdep.index         = jdep
-                jreq = mpi_comm.isend(tdep, dest=pid, tag=isend)
-                jreq.wait()
-                irecv_pid.append((irecv, pid))
 
             outs = []
             errs = []
 
             nfin = 0
             nerr = 0
-            print('Results:')
-            while(irecv_pid):
-                for j, irp in enumerate(irecv_pid):
-                    irecv, pid = irp
-                    # useful for debugging deadlocks
-                    #print('Waiting to hear back from pid {}, irecv {}'.format(pid, irecv))
-                    ioutserrs = mpi_comm.recv(source=pid, tag=irecv)
-                    idx, out, err = ioutserrs
-                    cmds = tc.master[idx].get_command_sequence()
-                    print_out_err(idx, cmds, out, err)                
-                    if any(err):
-                        nerr += 1
-                    else:
-                        nfin += 1
-                    irecv_pid.pop(j)
-                    tc.set_dep_done(idx)
-                    tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
-                                          num_checkpoints=args.num_checkpoints)
-                    break
+
+            for jdep, tdep in enumerate(tc.gen_next_todo()):
+                while (len(irecv_pid) < mpi_size - 1):
+                    pid = pid_pool.pop()
+                    isend = 2*jdep + 1
+                    irecv = 2*jdep + 2
+                    tdep.tag_from_root = isend
+                    tdep.tag_to_root   = irecv
+                    tdep.index         = jdep
+                    jsend_request = mpi_comm.isend(tdep, dest=pid, tag=isend)
+                    jrecv_request = mpi_comm.irecv(source=pid, tag=irecv)                    
+                    irecv_pid.append((pid, jrecv_request))
+
+                assign_new_task = False
+                while not assign_new_task:
+                    sleep(1)
+                    for j, (pid, jrecv_request) in enumerate(irecv_pid):
+                        jrecv_status = jrecv_request.Get_status()
+                        if jrecv_status != 0:
+                            # Successful receive, task is completed
+                            idx, out, err = jrecv_request.wait()
+                            cmds = tc.master[idx].get_command_sequence()
+                            print_out_err(idx, cmds, out, err)                
+                            if any(err):
+                                nerr += 1
+                            else:
+                                nfin += 1
+                            irecv_pid.pop(j)
+                            pid_pool.append(pid)
+                            tc.set_dep_done(idx)
+                            tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
+                                                  num_checkpoints=args.num_checkpoints)
+                            assign_new_task = True
+                            break
 
             # Print result summary
             print('Result Summary:')
