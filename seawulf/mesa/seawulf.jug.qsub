@@ -6,6 +6,9 @@
 #PBS -j oe
 #PBS -o mesa_cauchy_grid.txt
 
+# Seawulf has nodes with 2 NUMA nodes, 14 cores per NUMA node
+# This script asks for 2 physical nodes, 28 MPI processes per physical node.
+
 module load shared
 module load maui
 module load torque
