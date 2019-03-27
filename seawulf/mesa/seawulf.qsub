@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -l nodes=4:ppn=28
+#PBS -l nodes=8:ppn=14
 #PBS -l walltime=48:00:00
 #PBS -N mesa_cauchy_grid
 #PBS -q long
@@ -21,6 +21,6 @@ export OMP_NUM_THREADS=1
 
 cd $PBS_O_WORKDIR
 
-mpiexec -n 112 mpiproc_exec run_mesa.tasks
+mpirun -n 112 mpiproc_exec run_mesa.tasks
 
 
