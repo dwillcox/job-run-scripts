@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+"""
+Uses jug to execute independent tasks in parallel
+using N processes.
+
+Written for Python 3.
+
+Donald E. Willcox
+"""
+
+import shlex
+from subprocess import Popen, PIPE
+from jug import TaskGenerator
+
+@TaskGenerator
+def godo(cmd):
+    try:
+        # First, separate dependent commands connected by &&&
+        cmd_seq = cmd.split('&&&')
+        out_seq = []
+        err_seq = []
+        # Execute each command in the command sequence
+        for cmd in cmd_seq:
+            print(cmd)
+            # First, facilitate shell=False by passing cmd
+            # through shlex.split()
+            # cmd_lex = shlex.split(cmd)
+            # Execute cmd by supplying it to Popen
+
+            # Use shell=True to allow chaining multiple commands
+            # into one command using double ampersands (&&)
+            proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+            out, err = proc.communicate()
+            # Decode and return (stdout, stderr)
+            try:
+                out_seq.append(out.decode('utf-8'))
+            except:
+                out_seq.append('OUTPUT DECODE EXCEPTION FOR COMMAND {}'.format(cmd))
+            try:
+                err_seq.append(err.decode('utf-8'))
+            except:
+                err_seq.append('ERROR DECODE EXCEPTION FOR COMMAND {}'.format(cmd))
+    except:
+        raise
+
+# Get the list of tasks to execute
+todo = []
+ftasks = open("jug_tasks", 'r')
+for l in ftasks.readlines():
+    ls = l.strip()
+    if ls:
+        todo.append(ls)
+ftasks.close()
+ntasks = len(todo)
+
+for task in todo:
+    godo(task)
+
+print('Completed Execution')
