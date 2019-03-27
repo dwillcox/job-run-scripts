@@ -1,7 +1,18 @@
 #!/usr/bin/env python
 """
-Uses jug to execute independent tasks in parallel
-using N processes.
+Uses jug to execute independent tasks in parallel.
+
+Execute as:
+
+$ mpiexec -n N jug execute multitask_jug
+
+To use N processes in parallel.
+
+This expects a file named "jug_tasks" in the working directory
+containing a list of tasks to execute.
+
+That file can be generated from a template using the list_file_tasks
+script in this repo. For an example, see MESA/run_mesa.sh
 
 Written for Python 3.
 
