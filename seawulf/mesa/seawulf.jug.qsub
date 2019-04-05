@@ -28,3 +28,5 @@ cd $PBS_O_WORKDIR
 # May need to delete multitask_.jugdata/ before running
 
 mpiexec -n 56 jug execute multitask_jug
+
+rm -rf multitask_.jugdata
