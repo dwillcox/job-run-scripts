@@ -17,7 +17,7 @@ from subprocess import Popen, PIPE
 parser = argparse.ArgumentParser()
 parser.add_argument('runscript', type=str,
                     help='Name of run script to submit repeatedly.')
-parser.add_argument('-w', '--initialwait', type=str, 
+parser.add_argument('-w', '--initialwait', type=str, default="-1",
                     help='Job ID to wait on at start of chain, if any.')
 parser.add_argument('-n', '--nsubmissions', type=int, default=1,
                     help='Number of times to submit the run script. (Default 1)')
@@ -26,7 +26,7 @@ args = parser.parse_args()
 ndepends = -1
 for i in range(args.nsubmissions):
     if i == 0 and args.initialwait:
-        ndepends = args.initialwait
+        ndepends = int(args.initialwait)
     cmdlist = ['qsub']
     if ndepends != -1:
         cmdlist += ['-W', 'depend=afterany:{}'.format(ndepends)]
