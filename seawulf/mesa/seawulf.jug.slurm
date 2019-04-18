@@ -15,7 +15,7 @@ module load mvapich2/gcc/64/2.2rc1
 module load gcc
 module load anaconda/3
 
-source /gpfs/home/dwillcox/codes/mesa-for-UQ/revision-8118/setup_mesa.sh
+source /gpfs/home/dwillcox/codes/mesa-for-UQ/setup_mesa.sh
 
 export PATH="/gpfs/home/dwillcox/job-run-scripts:$PATH"
 export PATH="/gpfs/home/dwillcox/.local/bin:$PATH"
