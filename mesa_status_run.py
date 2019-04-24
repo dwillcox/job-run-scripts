@@ -36,6 +36,7 @@ args = parser.parse_args()
 
 rephoto = re.compile('\Asave photos/([\w]+) for model ([\w]+)\Z')
 reterminate = re.compile('\Atermination code:(.*)\Z')
+restop = re.compile('\ASTOP (.*)\Z')
 
 def runcmd(cmd):
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
@@ -71,6 +72,11 @@ def gettermination(lines):
         if mt:
             terminated = True
             code = mt.group(1).strip()
+            break
+        ms = restop.match(l)
+        if ms:
+            terminated = True
+            code = ms.group(1).strip()
             break
     return terminated, code
 
