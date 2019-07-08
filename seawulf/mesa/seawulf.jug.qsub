@@ -1,10 +1,13 @@
 #!/bin/bash
-#PBS -l nodes=8:ppn=14
+#PBS -l nodes=2:ppn=28
 #PBS -l walltime=48:00:00
 #PBS -N mesa_cauchy_grid
 #PBS -q long
 #PBS -j oe
 #PBS -o mesa_cauchy_grid.txt
+
+# Seawulf has nodes with 2 NUMA nodes, 14 cores per NUMA node
+# This script asks for 2 physical nodes, 28 MPI processes per physical node.
 
 module load shared
 module load maui
@@ -16,11 +19,14 @@ module load anaconda/3
 source /gpfs/home/dwillcox/codes/mesa-for-UQ/setup_mesa.sh
 
 export PATH="/gpfs/home/dwillcox/job-run-scripts:$PATH"
+export PATH="/gpfs/home/dwillcox/.local/bin:$PATH"
 
 export OMP_NUM_THREADS=1
 
 cd $PBS_O_WORKDIR
 
-mpirun -n 112 mpiproc_exec run_mesa.tasks
+# May need to delete multitask_.jugdata/ before running
 
+mpiexec -n 56 jug execute multitask_jug
 
+rm -rf multitask_.jugdata

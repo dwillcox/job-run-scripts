@@ -1,10 +1,10 @@
 #!/bin/bash
-#PBS -l nodes=8:ppn=14
-#PBS -l walltime=48:00:00
-#PBS -N mesa_cauchy_grid
-#PBS -q long
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=00:10:00
+#PBS -N mesa_test
+#PBS -q debug
 #PBS -j oe
-#PBS -o mesa_cauchy_grid.txt
+#PBS -o mesa_test.txt
 
 module load shared
 module load maui
@@ -21,6 +21,5 @@ export OMP_NUM_THREADS=1
 
 cd $PBS_O_WORKDIR
 
-mpirun -n 112 mpiproc_exec run_mesa.tasks
-
+mpirun -n 1 mesa_status_run.py run_c0_test.log -s log_L_lower_limit -rno -rlog run_c0_test.log
 
