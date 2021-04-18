@@ -28,8 +28,8 @@ parser.add_argument('-r', '--file_regexp', type=str,
                     help="Python regular expression matching the files to insert in the template for the '{file}' substring.")
 parser.add_argument('-chk', '--checkpoint', type=str,
                     help='(Optional) Checkpoint file to restart from.')
-parser.add_argument('-bchk', '--base_checkpoint', type=str, default='mpiproc',
-                    help='(Optional) Base name for saving checkpoints. Defaults to "mpiproc"')
+parser.add_argument('-bchk', '--base_checkpoint', type=str,
+                    help='(Optional) Base name for saving checkpoints. Defaults to no checkpointing.')
 parser.add_argument('-nchk', '--num_checkpoints', type=int, default=2,
                     help=('(Optional) Number of most recent checkpoint files to keep.\n' +
                           'By default, two checkpoint files will be carried.\n' +
@@ -300,8 +300,9 @@ if __name__ == '__main__':
             cmds = tc.primary[idx].get_command_sequence()
             print_out_err(idx, cmds, outs, errs)
             tc.set_dep_done(idx)
-            tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
-                                  num_checkpoints=args.num_checkpoints)
+            if args.base_checkpoint:
+                tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
+                                      num_checkpoints=args.num_checkpoints)
     else:
         if mpi_rank == 0:
             # Open the inputs file
@@ -363,8 +364,9 @@ if __name__ == '__main__':
                             irecv_pid.pop(j)
                             pid_pool.append(pid)
                             tc.set_dep_done(idx)
-                            tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
-                                                  num_checkpoints=args.num_checkpoints)
+                            if args.base_checkpoint:
+                                tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
+                                                      num_checkpoints=args.num_checkpoints)
                             assign_new_task = True
                             break
 
@@ -373,8 +375,7 @@ if __name__ == '__main__':
             print(f"{nfin} of {tc.num_itasks} Tasks Completed")
             print(f"{nerr} Tasks Wrote to STDERR")
 
-            # Save a file noting we are finished
-            tc.note_if_finished(notefile_base=args.base_checkpoint)
+            tc.note_if_finished(notefile_base="mpiproc_exec")
 
             # Program is terminating, send termination and finalize MPI
             continue_running = False
