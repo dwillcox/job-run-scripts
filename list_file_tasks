@@ -19,6 +19,20 @@ import itertools
 import re
 import os
 
+def get_matching_files(regexp_string):
+    # Compile the re first
+    regexp = re.compile(regexp_string)
+
+    # Get the list of subject files in the current directory
+    cwd_files = os.listdir()
+
+    subject_files = []
+    for f in cwd_files:
+        if regexp.match(f):
+            if not f"{f}.skip" in cwd_files:
+                subject_files.append(f)
+    return subject_files
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('template', type=str,
@@ -40,7 +54,6 @@ if __name__ == '__main__':
         
     if args.regexp_file_names:
         # Sanity Check: compile the regular expression
-        regexp = re.compile(args.regexp_file_names)
 
     # Get the tasks to perform on each file
     tasks = []
@@ -62,23 +75,11 @@ if __name__ == '__main__':
 
     # Get input file names if targeted by regular expression
     if args.regexp_file_names:
-        # Get the list of subject files in the current directory
-        ## Files in the current directory
-        cwd_files = os.listdir()
-        ## Filter files by regexp and skip if {file}.skip exists
-        subject_files = []
-        for f in cwd_files:
-            if regexp.match(f):
-                if not f + '.skip' in cwd_files:
-                    subject_files.append(f)
+        subject_files += get_matching_files(args.regexp_file_names)
 
     # Form commands and write the output file
     fo = open(args.out_task_file, 'w')
     for sf in subject_files:
-        cmd_line = ''
-        for ti, tk in enumerate(tasks):
-            if ti != 0:
-                cmd_line += ' &&& '
-            cmd_line += tk.replace('{file}', sf)
+        cmd_line = " &&& ".join(task.replace("{file}", sf) for task in tasks)
         fo.write(cmd_line + '\n')
     fo.close()
