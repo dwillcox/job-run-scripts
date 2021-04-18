@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Uses MPI to execute a set of tasks in parallel, provided in a taskfile.
 
@@ -10,6 +10,7 @@ Donald E. Willcox
 import argparse
 import shlex
 import os
+import re
 from itertools import cycle
 from subprocess import Popen, PIPE
 from mpi4py import MPI
@@ -141,27 +142,19 @@ class DependentTasks(object):
         return cstring
 
 class TaskCollection(object):
-    def __init__(self, args):
+    def __init__(self, args, checkpoint_file=None):
         self.num_itasks = 0
-        self.master = []
+        self.primary = []
         self.checkpoint_files = []
         
-        if args.taskfile:
+        if args.checkpoint:
+            self.load_task_file(args.checkpoint)
+        elif args.taskfile:
             self.load_task_file(args.taskfile)
+        elif args.task_template and args.file_regexp:
+            self.make_tasks_from_regexp(args)
         else:
-            # allow specifying task template and file regular expression
-
-    def set_dep_done(self, j):
-        # Set the jth dependent task complete
-        self.master[j].set_all_done()
-
-    def num_idep_done(self):
-        # Get the number of independent tasks completed
-        ndone = 0
-        for td in self.master:
-            if not td.has_undone_task():
-                ndone += 1
-        return ndone
+            raise NotImplementedError("Neither a taskfile nor template/regexp pair were supplied.")
 
     def load_task_file(self, taskfile):
         # Get the list of tasks to execute
@@ -174,13 +167,46 @@ class TaskCollection(object):
                 tasks.append(ls)
         ftasks.close()
 
-        self.master = [DependentTasks(t) for t in tasks]
-        self.num_itasks = len(self.master)
+        self.init_task_list(tasks)
 
-    def refresh_from_checkpoint(self, checkfile):
-        tchk = TaskCollection(checkfile)
-        for id, tdchk in enumerate(tchk.master):
-            tdslf = self.master[id]
+    def make_tasks_from_regexp(self, args):
+        # build tasks from task template and file regular expression
+        assert(args.task_template is not None and args.file_regexp is not None)
+        assert("{file}" in args.task_template)
+
+        # compile the re
+        regexp = re.compile(args.file_regexp)
+
+        # get list of files in current working directory
+        # matching the regular expression
+        cwd_files = os.listdir()
+        task_files = [f for f in cwd_files if regexp.match(f) and not f+".skip" in cwd_files]
+
+        # combine task template and task files to get tasks
+        tasks = [args.task_template.replace("{file}", f) for f in task_files]
+
+        self.init_task_list(tasks)
+
+    def init_task_list(self, tasks):
+        self.primary = [DependentTasks(t) for t in tasks]
+        self.num_itasks = len(self.primary)
+
+    def set_dep_done(self, j):
+        # Set the jth dependent task complete
+        self.primary[j].set_all_done()
+
+    def num_idep_done(self):
+        # Get the number of independent tasks completed
+        ndone = 0
+        for td in self.primary:
+            if not td.has_undone_task():
+                ndone += 1
+        return ndone
+
+    def refresh_from_checkpoint(self, args):
+        tchk = TaskCollection(args)
+        for id, tdchk in enumerate(tchk.primary):
+            tdslf = self.primary[id]
             for j, tc in enumerate(tdchk.tasks):
                 if tc == tdslf.tasks[j]:
                     tdslf.tasks[j].mark_done()
@@ -199,7 +225,7 @@ class TaskCollection(object):
         fchk.write('# COMPLETED INDEPENDENT TASKS: {}\n'.format(num_idone))
         
         # Save progress for each DependentTask on its own line
-        for dt in self.master:
+        for dt in self.primary:
             st = dt.get_done_string()
             fchk.write(st + '\n')
         fchk.close()
@@ -223,14 +249,14 @@ class TaskCollection(object):
 
     def get_undone_tasks(self):
         undone = []
-        for dt in self.master:
+        for dt in self.primary:
             if dt.has_undone_task():
                 undone.append(dt)
         return undone
 
     def gen_next_todo(self):
         # Get the next independent task
-        for dt in self.master:
+        for dt in self.primary:
             if dt.has_undone_task():
                 yield dt        
 
@@ -262,7 +288,7 @@ if __name__ == '__main__':
         
         # Restart from the checkpoint file, if supplied
         if args.checkpoint:
-            tc.refresh_from_checkpoint(args.checkpoint)
+            tc.refresh_from_checkpoint(args)
 
         for idx, tdep in enumerate(tc.gen_next_todo()):
             outs = []
@@ -271,7 +297,7 @@ if __name__ == '__main__':
                 t.execute()
                 outs.append(t.get_output())
                 errs.append(t.get_error())
-            cmds = tc.master[idx].get_command_sequence()
+            cmds = tc.primary[idx].get_command_sequence()
             print_out_err(idx, cmds, outs, errs)
             tc.set_dep_done(idx)
             tc.save_to_checkpoint(checkfile_base=args.base_checkpoint,
@@ -283,7 +309,7 @@ if __name__ == '__main__':
 
             # Restart from the checkpoint file, if supplied
             if args.checkpoint:
-                tc.refresh_from_checkpoint(args.checkpoint)
+                tc.refresh_from_checkpoint(args)
 
             pid_pool = list(range(1, mpi_size))
 
@@ -303,18 +329,19 @@ if __name__ == '__main__':
 
             while not finished_with_tasks:
                 if tc.num_itasks == tc.num_idep_done():
-                    print('finished with all tasks')
+                    print("Finished with all tasks")
                     finished_with_tasks = True
+                    break
 
                 while (undone_tasks and len(irecv_pid) < mpi_size - 1):
                     tdep = undone_tasks.pop(0)
-                    pid = pid_pool.pop(0)
+                    pid = pid_pool.pop()
                     isend = 2*jdep + 1
                     irecv = 2*jdep + 2
                     tdep.tag_from_root = isend
                     tdep.tag_to_root   = irecv
                     tdep.index         = jdep
-                    print('Assigning job {} to process {}'.format(jdep, pid))
+                    print(f"Assigning job {jdep} to process {pid}")
                     jsend_request = mpi_comm.isend(tdep, dest=pid, tag=isend)
                     jrecv_request = mpi_comm.irecv(source=pid, tag=irecv)                    
                     irecv_pid.append((pid, jrecv_request))
@@ -322,19 +349,17 @@ if __name__ == '__main__':
 
                 assign_new_task = False
                 while not assign_new_task:
-                    sleep(0.1)
                     for j, (pid, jrecv_request) in enumerate(irecv_pid):
                         jrecv_status = jrecv_request.Get_status()
                         if jrecv_status:
-                            print('Process {} finished its task.'.format(pid))
+                            print(f"Process {pid} finished its task.")
                             # Successful receive, task is completed
                             idx, out, err = jrecv_request.wait()
-                            cmds = tc.master[idx].get_command_sequence()
+                            cmds = tc.primary[idx].get_command_sequence()
                             print_out_err(idx, cmds, out, err)                
                             if any(err):
                                 nerr += 1
-                            else:
-                                nfin += 1
+                            nfin += 1
                             irecv_pid.pop(j)
                             pid_pool.append(pid)
                             tc.set_dep_done(idx)
@@ -344,9 +369,9 @@ if __name__ == '__main__':
                             break
 
             # Print result summary
-            print('Result Summary:')
-            print('{} Tasks Completed Successfully'.format(nfin))
-            print('{} Tasks Yielded An Error'.format(nerr))
+            print("Result Summary:")
+            print(f"{nfin} of {tc.num_itasks} Tasks Completed")
+            print(f"{nerr} Tasks Wrote to STDERR")
 
             # Save a file noting we are finished
             tc.note_if_finished(notefile_base=args.base_checkpoint)
@@ -357,18 +382,17 @@ if __name__ == '__main__':
                 mpi_comm.send(continue_running, dest=pid)
             MPI.Finalize()
         else:
-            stop = False
-            while (not stop):
-                tdep = mpi_comm.recv(source=0, tag=MPI.ANY_TAG)
-                if tdep:
+            while True:
+                dependent_tasks = mpi_comm.recv(source=0, tag=MPI.ANY_TAG)
+                if dependent_tasks:
                     outs = []
                     errs = []
-                    for t in tdep.gen_next_todo():
+                    for t in dependent_tasks.gen_next_todo():
                         t.execute()
                         outs.append(t.get_output())
                         errs.append(t.get_error())
-                    ioutserrs = (tdep.index, outs, errs)
-                    sreq = mpi_comm.isend(ioutserrs, dest=0, tag=tdep.tag_to_root)
+                    ioutserrs = (dependent_tasks.index, outs, errs)
+                    sreq = mpi_comm.isend(ioutserrs, dest=0, tag=dependent_tasks.tag_to_root)
                     sreq.wait()
                 else:
-                    stop = True    
+                    break
