@@ -19,22 +19,22 @@ import itertools
 import re
 import os
 
-parser = argparse.ArgumentParser()
-parser.add_argument('template', type=str,
-                    help=('Template file containing command-line tasks to execute, ' +
-                          'one per line. \n' +
-                          'The name of the subject file should be denoted by the string ' +
-                          '"{file}" (excluding quotes).'))
-parser.add_argument('-re', '--regexp_file_names', type=str,
-                    help='Python regular expression which files must match.')
-parser.add_argument('-ifile', '--input_file_names', type=str,
-                    help=('Name of file containing file names, one on each line, ' +
-                          'to use as {file} entries in the template.'))
-parser.add_argument('-o', '--out_task_file', type=str, default='tasks.todo',
-                    help='Name of the output file listing the desired tasks. (Default tasks.todo).')
-args = parser.parse_args()
-
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('template', type=str,
+                        help=('Template file containing command-line tasks to execute, ' +
+                              'one per line. \n' +
+                              'The name of the subject file should be denoted by the string ' +
+                              '"{file}" (excluding quotes).'))
+    parser.add_argument('-re', '--regexp_file_names', type=str,
+                        help='Python regular expression which files must match.')
+    parser.add_argument('-ifile', '--input_file_names', type=str,
+                        help=('Name of file containing file names, one on each line, ' +
+                              'to use as {file} entries in the template.'))
+    parser.add_argument('-o', '--out_task_file', type=str, default='tasks.todo',
+                        help='Name of the output file listing the desired tasks. (Default tasks.todo).')
+    args = parser.parse_args()
+
     if not (args.regexp_file_names or args.input_file_names):
         print('ERROR: either -re or -ifile options must be supplied.')
         
