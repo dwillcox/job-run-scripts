@@ -20,6 +20,10 @@ parser.add_argument('-ifps', '--input_fps', type=int, default=15,
                     help='Input rate at which to read images, i.e. number of pngs per second. Default is 15.')
 parser.add_argument('-ofps', '--output_fps', type=int, default=25,
                     help='Output rate of movie frames (not the rate of plot images). Default is 25.')
+parser.add_argument('-w', '--width', type=int, default=1440,
+                    help='Width in pixels of movie. Default is 1440.')
+parser.add_argument('-h', '--height', type=int, default=1080,
+                    help='Height in pixels of movie. Default is 1080.')
 args = parser.parse_args()
 
 def compare_mask(s1, s2):
@@ -107,9 +111,8 @@ if __name__=='__main__':
     symnames  = symlink_inputs(base_link, input_files)
 
     # Run ffmpeg on the files specified
-    cmd = 'ffmpeg -r {} -i __fftemp_%010d.png -s 1440x1080 -vcodec libx264 -crf {} -pix_fmt yuv420p {}.mp4'.format(args.input_fps,
-                                                                                                                   args.output_fps,
-                                                                                                                   args.moviename)
+    cmd = f"ffmpeg -r {args.input_fps} -i __fftemp_%010d.png -s {args.width}x{args.height} -vcodec libx264 -crf {args.output_fps} -pix_fmt yuv420p {args.moviename}.mp4"
+
     os.system(cmd)
 
     # Remove temporary files
