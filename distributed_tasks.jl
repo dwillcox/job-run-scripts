@@ -17,29 +17,23 @@ function parse_commandline()
             required = true
     end
 
-    return parse_args(s)
-end
-
-function make_tasks(args)
-    template = args["task"]
-    tasks = [replace(template, "{entry}" => entry) for entry=args["entries"]]
-    return tasks
-end
-
-@everywhere function execute_task(task)
-    run(`sh -c $task`)
+    parse_args(s)
 end
 
 function main()
     args = parse_commandline()
 
     # setup parallelism
-    manager = MPIManager(np=args.nprocs)
+    manager = MPIManager(np=args["nprocs"])
     addprocs(manager)
 
+    # make tasks
+    tasks = [replace(args["task"], "{entry}" => entry) for entry=args["entries"]]
+
     # execute tasks in parallel
-    tasks = make_tasks(args)
-    pmap(execute_task, tasks)
+    @sync @distributed for task in tasks
+        run(`sh -c $task`)
+    end
 end
 
 main()
