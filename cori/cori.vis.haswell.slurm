@@ -36,6 +36,7 @@
 # Which allocation to use:
 #SBATCH -A m3761
 
+module load PrgEnv-intel
 module load julia/1.6.0
 
 export PYTHONPATH="/global/u2/d/dwillcox/dev-emu/Emu_scripts/data_reduction:$PYTHONPATH"
