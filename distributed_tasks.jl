@@ -34,6 +34,8 @@ function main()
     @sync @distributed for task in tasks
         run(`sh -c $task`)
     end
+
+    println("Completed all tasks.")
 end
 
 main()
