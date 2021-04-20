@@ -1,3 +1,4 @@
+using MPIClusterManagers, Distributed
 using ArgParse
 
 function parse_commandline()
@@ -10,6 +11,10 @@ function parse_commandline()
             help = "List of entries to substitute into the task '{entry}' field to generate all tasks."
             required = true
             nargs = '+'
+        "--nprocs"
+            help = "Number of processes to use."
+            arg_type = Int
+            required = true
     end
 
     return parse_args(s)
@@ -27,6 +32,12 @@ end
 
 function main()
     args = parse_commandline()
+
+    # setup parallelism
+    manager = MPIManager(np=args.nprocs)
+    addprocs(manager)
+
+    # execute tasks in parallel
     tasks = make_tasks(args)
     pmap(execute_task, tasks)
 end
